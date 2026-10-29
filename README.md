@@ -5,8 +5,8 @@ CLI scanner and PoC for CVE-2026-109618 / CVE-2026-109619 (PHP OOM heap corrupti
 
 CLI scanner and PoC for CVE-2026-109618 and CVE-2026-109619.
 
-**Affected Versions:** PHP 5.4.0 through 8.5.11  
-**Patched Versions:**  PHP 8.5.12, 8.4.27, 8.3.36, 8.2.35 (see note below on 8.4.27 and 8.5.12)  
+**Affected:** PHP 5.4.0 through 8.5.11  
+**Patched:** PHP 8.5.12, 8.4.27, 8.3.36, 8.2.35 (see note below on 8.4.27 and 8.5.12)  
 **CVSS:** 9.2 (both CVEs)  
 **Advisory numbers:** Ubuntu USN-8948-1/2, Debian DSA-6574-1, Red Hat RHSA-2026:87072
 
@@ -54,7 +54,7 @@ python3 php2shell.py example.com --poc --json | jq .
 
 ---
 
-## What does it check:
+## What it checks
 
 **Always:**
 - PHP version from `X-Powered-By`, `Server` headers, and PHP error pages
@@ -96,6 +96,10 @@ $_SESSION["upload_progress_<key>"] = [
 
 This demo sends a benign marker as the filename and confirms whether the write primitive is reachable. **It does not trigger deserialization.** In a real attack the filename field carries a serialized PHP object; with a `session.serialize_handler` mismatch (CVE-2026-115560), the object is deserialized on the next session read, completing the RCE chain.
 
+### Chain E: session decode failure (related, not in this PoC)
+
+Chain E uses the same upload-progress write primitive but triggers differently. A session file containing a valid serialized object followed by trailing junk causes PHP to fire `__destruct()` during the decode failure (`PHP_VAR_UNSERIALIZE_DESTROY`), before any script code runs. Unlike Chain C, no handler mismatch is required. Any gadget class loaded at request startup is sufficient. The mitigation is the same: `session.upload_progress.enabled = Off`.
+
 ---
 
 ## Mitigations
@@ -113,6 +117,8 @@ This demo sends a benign marker as the filename and confirms whether the write p
 PHP 8.4.27 and 8.5.12 patch CVE-2026-109618/CVE-2026-109619 but introduced a GC double-free regression (GH-24488, filed as php/php-src issue #24488). The fix was merged Oct 22 2026; pending release in 8.4.28 and 8.5.13. Mitigation: `zend.enable_gc = Off` in php.ini until the fix ships. PHP 8.3.36 and 8.2.35 are not affected by this regression.
 
 **CVE-2026-115560** (session serialize_handler mismatch) was acknowledged by PHP on Oct 23 2026 and is not yet patched. It requires a specific combination: `session.serialize_handler` set to `php_binary` or `php_serialize` in php.ini, and a runtime `ini_set()` call that switches the handler to `php` before `session_start()`. The default handler (`php`) is not affected through this path. Mitigation: `session.upload_progress.enabled = Off` in php.ini. Configuration hardening is recommended regardless of patch status.
+
+**Enum-autoload UAF:** Independent research (no CVE assigned) identifies a use-after-free in PHP's enum autoloading triggered during session decode (CVSS 9.8 claimed, unpatched). The trigger goes through the same session write primitive as CVE-2026-109619. Setting `session.upload_progress.enabled = Off` in `php.ini` blocks the write primitive and prevents this path from being reached remotely.
 
 **Note on `disable_functions`:** Chain B (var_destroy use-after-free) dispatches below PHP's function-level checks and bypasses `disable_functions` entirely. A populated list constrains Chains A, C, and E but not B.
 
