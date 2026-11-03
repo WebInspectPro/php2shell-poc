@@ -84,11 +84,21 @@ DISCLAIMER = (
 
 # HTTP helpers
 
+_proxy_url: Optional[str] = None   # set by --proxy in main()
+
+
 def _ssl_ctx() -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    handlers: list = [urllib.request.HTTPSHandler(context=_ssl_ctx())]
+    if _proxy_url:
+        handlers.insert(0, urllib.request.ProxyHandler({"http": _proxy_url, "https": _proxy_url}))
+    return urllib.request.build_opener(*handlers)
 
 
 def fetch(
@@ -105,7 +115,7 @@ def fetch(
         for k, v in headers.items():
             req.add_header(k, v)
     try:
-        with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
+        with _opener().open(req, timeout=timeout) as r:
             return r.status, dict(r.headers), r.read(131072)
     except urllib.error.HTTPError as e:
         try:
@@ -660,7 +670,13 @@ def main() -> None:
                    help="Check GH-24488: GC double-free regression in PHP 8.4.27 and 8.5.12 (version-based)")
     p.add_argument("--https", action="store_true",
                    help="Force HTTPS (skip auto-detection, useful for slow SSL handshakes)")
+    p.add_argument("--proxy", metavar="URL",
+                   help="HTTP/HTTPS proxy (e.g. http://127.0.0.1:8080 for Burp Suite)")
     args = p.parse_args()
+
+    global _proxy_url
+    if args.proxy:
+        _proxy_url = args.proxy
 
     domain = re.sub(r"^https?://", "", args.domain.strip()).split("/")[0]
 

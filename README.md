@@ -1,6 +1,3 @@
-# php2shell-poc
-CLI scanner and PoC for CVE-2026-109618 / CVE-2026-109619 (PHP OOM heap corruption and session upload-progress injection, CVSS 9.2). Affects PHP 5.4.0-8.5.11; patched in 8.2.35, 8.3.36, 8.4.27, 8.5.12. 
-
 # php2shell.py
 
 CLI scanner and PoC for CVE-2026-109618 and CVE-2026-109619.
@@ -35,6 +32,7 @@ python3 php2shell.py <domain> [options]
   --https     Force HTTPS (skip auto-detection)
   --json      Machine-readable JSON output
   --timeout   Per-request timeout in seconds (default: 15)
+  --proxy     Route all requests through a proxy (e.g. http://127.0.0.1:8080 for Burp Suite)
 ```
 
 **Recon only:**
@@ -50,6 +48,11 @@ python3 php2shell.py example.com --poc
 **JSON output (for piping or tooling):**
 ```bash
 python3 php2shell.py example.com --poc --json | jq .
+```
+
+**Route through Burp Suite (or any HTTP proxy):**
+```bash
+python3 php2shell.py example.com --poc --proxy http://127.0.0.1:8080
 ```
 
 ---
